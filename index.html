@@ -3,13 +3,322 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Semáforo Inteligente - CLP</title>
+  <title>Semáforo Inteligente CLP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black:   #0a0a0f;
+      --surface: #12121a;
+      --card:    #1a1a26;
+      --border:  #2a2a3a;
+      --red:     #ff3b30;
+      --yellow:  #ffcc00;
+      --green:   #34c759;
+      --text:    #e8e8f0;
+      --muted:   #7070a0;
+      --mono:    'Share Tech Mono', monospace;
+      --sans:    'Inter', sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--black);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── grid lines background ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 40px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+    }
+    .logo span { color: var(--green); }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--green);
+      letter-spacing: 0.1em;
+    }
+    .pulse {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 24px 60px;
+      gap: 32px;
+    }
+
+    /* traffic light */
+    .traffic-light {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+    .tl-pole {
+      width: 6px;
+      height: 40px;
+      background: var(--border);
+      border-radius: 3px;
+    }
+    .tl-body {
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 0 40px rgba(52,199,89,0.08);
+    }
+    .bulb {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      transition: box-shadow 0.4s, opacity 0.4s;
+    }
+    .bulb.red    { background: var(--red);    opacity: 0.18; }
+    .bulb.yellow { background: var(--yellow); opacity: 0.18; }
+    .bulb.green  { background: var(--green);  opacity: 1;
+                   box-shadow: 0 0 18px var(--green), 0 0 40px rgba(52,199,89,0.5); }
+
+    /* cycling animation */
+    @keyframes cycleRed    { 0%,30%{opacity:1;box-shadow:0 0 18px var(--red),0 0 40px rgba(255,59,48,.5)} 31%,100%{opacity:.18;box-shadow:none} }
+    @keyframes cycleYellow { 0%,30%{opacity:.18;box-shadow:none} 31%,60%{opacity:1;box-shadow:0 0 18px var(--yellow),0 0 40px rgba(255,204,0,.5)} 61%,100%{opacity:.18;box-shadow:none} }
+    @keyframes cycleGreen  { 0%,60%{opacity:.18;box-shadow:none} 61%,100%{opacity:1;box-shadow:0 0 18px var(--green),0 0 40px rgba(52,199,89,.5)} }
+
+    .bulb.red    { animation: cycleRed    4s ease-in-out infinite; }
+    .bulb.yellow { animation: cycleYellow 4s ease-in-out infinite; }
+    .bulb.green  { animation: cycleGreen  4s ease-in-out infinite; }
+
+    /* headline */
+    .hero-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.2em;
+      color: var(--green);
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.4rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      max-width: 640px;
+    }
+    h1 em {
+      font-style: normal;
+      color: var(--green);
+    }
+    .hero-sub {
+      font-size: 1rem;
+      color: var(--muted);
+      max-width: 500px;
+      line-height: 1.7;
+    }
+
+    /* ── CARDS ── */
+    .cards {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      padding: 0 24px 80px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 28px;
+      width: 300px;
+      text-decoration: none;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+      cursor: pointer;
+    }
+    .card:hover {
+      transform: translateY(-6px);
+    }
+    .card.mockup:hover {
+      border-color: var(--yellow);
+      box-shadow: 0 12px 48px rgba(255,204,0,0.12);
+    }
+    .card.simulacao:hover {
+      border-color: var(--green);
+      box-shadow: 0 12px 48px rgba(52,199,89,0.12);
+    }
+
+    .card-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+    }
+    .mockup   .card-icon { background: rgba(255,204,0,0.1);  }
+    .simulacao .card-icon { background: rgba(52,199,89,0.1); }
+
+    .card-tag {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .mockup   .card-tag { color: var(--yellow); }
+    .simulacao .card-tag { color: var(--green); }
+
+    .card h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+    .card p {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .card-cta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-top: 4px;
+      transition: gap 0.2s;
+    }
+    .card:hover .card-cta { gap: 12px; }
+    .mockup   .card-cta { color: var(--yellow); }
+    .simulacao .card-cta { color: var(--green); }
+
+    /* ── FOOTER ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    @media (max-width: 640px) {
+      header { padding: 16px 20px; }
+      .hero  { padding: 48px 20px 40px; }
+      .cards { padding: 0 20px 60px; }
+      .card  { width: 100%; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Sistema de Semáforo Inteligente</h1>
-  <ul>
-    <li><a href="semaforo_mockup.html">Mockup do Semáforo</a></li>
-    <li><a href="semaforo_simulacao.html">Simulação do Semáforo</a></li>
-  </ul>
+
+  <header>
+    <div class="logo">CLP / <span>SEMÁFORO</span></div>
+    <div class="status-badge"><div class="pulse"></div>SISTEMA ATIVO</div>
+  </header>
+
+  <main class="hero">
+    <div class="traffic-light">
+      <div class="tl-body">
+        <div class="bulb red"></div>
+        <div class="bulb yellow"></div>
+        <div class="bulb green"></div>
+      </div>
+      <div class="tl-pole"></div>
+    </div>
+
+    <p class="hero-eyebrow">Automação Industrial · Ladder Logic</p>
+
+    <h1>Sistema de <em>Semáforo</em><br>Inteligente com CLP</h1>
+
+    <p class="hero-sub">
+      Controle semafórico baseado em CLP com botoeira para pedestres,
+      temporizadores em cascata e lógica Ladder simulada no MacroPLC.
+    </p>
+  </main>
+
+  <section class="cards">
+
+    <a class="card mockup" href="semaforo_mockup.html">
+      <div class="card-icon">🖥️</div>
+      <span class="card-tag">Interface</span>
+      <h2>Mockup do Semáforo</h2>
+      <p>Visualização estática da interface de controle — layout dos painéis, indicadores e botoeira de pedestre.</p>
+      <div class="card-cta">Abrir mockup <span>→</span></div>
+    </a>
+
+    <a class="card simulacao" href="semaforo_simulacao.html">
+      <div class="card-icon">⚡</div>
+      <span class="card-tag">Simulação</span>
+      <h2>Simulação do Semáforo</h2>
+      <p>Ciclo semafórico em tempo real com controle de pedestres, intertravamento de sinais e temporizadores.</p>
+      <div class="card-cta">Abrir simulação <span>→</span></div>
+    </a>
+
+  </section>
+
+  <footer>
+    INTELLIGENT TRAFFIC LIGHT CONTROL SYSTEM &nbsp;·&nbsp; CLP / LADDER LOGIC / MACHROPLC
+  </footer>
+
 </body>
 </html>
