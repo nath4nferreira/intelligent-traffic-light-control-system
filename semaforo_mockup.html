@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semáforo Inteligente — CLP</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --green: #4ade80;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --blue: #60a5fa;
+    --dark: #0d0d0d;
+    --dark2: #1a1a1a;
+    --dark3: #252525;
+    --light: #f5f5f0;
+    --light2: #e8e8e2;
+    --text-dark: #1a1a1a;
+    --text-light: #f5f5f0;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: var(--sans);
+    background: #000;
+  }
+
+  /* ── DECK CONTAINER ── */
+  .deck {
+    width: 100vw; height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── SLIDES ── */
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    padding-bottom: 80px; /* espaço para o nav não cobrir conteúdo */
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .slide.active .anim { animation-play-state: running !important; }
+
+  /* ── ANIMATION CLASSES ── */
+  .fade-up {
+    opacity: 0;
+    transform: translateY(30px);
+    animation: fadeUp 0.6s ease forwards paused;
+    animation-play-state: paused;
+  }
+  .fade-left {
+    opacity: 0;
+    transform: translateX(-30px);
+    animation: fadeLeft 0.5s ease forwards paused;
+    animation-play-state: paused;
+  }
+  .fade-in {
+    opacity: 0;
+    animation: fadeIn 0.5s ease forwards paused;
+    animation-play-state: paused;
+  }
+  .scale-in {
+    opacity: 0;
+    transform: scale(0.85);
+    animation: scaleIn 0.5s ease forwards paused;
+    animation-play-state: paused;
+  }
+
+  @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeLeft { to { opacity: 1; transform: translateX(0); } }
+  @keyframes fadeIn { to { opacity: 1; } }
+  @keyframes scaleIn { to { opacity: 1; transform: scale(1); } }
+
+  /* stagger delays */
+  .d1 { animation-delay: 0.1s; }
+  .d2 { animation-delay: 0.25s; }
+  .d3 { animation-delay: 0.4s; }
+  .d4 { animation-delay: 0.55s; }
+  .d5 { animation-delay: 0.7s; }
+  .d6 { animation-delay: 0.85s; }
+  .d7 { animation-delay: 1.0s; }
+  .d8 { animation-delay: 1.15s; }
+
+  /* ── NAV ── */
+  .nav {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    z-index: 100;
+    background: rgba(10,10,10,0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 50px;
+    padding: 8px 18px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  .nav button {
+    background: none; border: none; cursor: pointer;
+    color: rgba(255,255,255,0.7); font-size: 16px;
+    width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    transition: background 0.2s, color 0.2s;
+  }
+  .nav button:hover { background: rgba(255,255,255,0.12); color: #fff; }
+  .nav .counter {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    min-width: 40px;
+    text-align: center;
+  }
+  .nav .dots {
+    display: flex; gap: 5px;
+  }
+  .nav .dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    transition: background 0.3s, transform 0.3s, width 0.3s;
+    cursor: pointer;
+  }
+  .nav .dot.active {
+    background: var(--green);
+    transform: scale(1.5);
+  }
+
+  /* ── TRAFFIC LIGHT SVG COMPONENT ── */
+  .tlight {
+    width: 52px;
+    flex-shrink: 0;
+  }
+
+  /* ════════════════════════════════
+     SLIDE 1 — CAPA (dark)
+  ═══════════════════════════════════ */
+  #s1 {
+    background: var(--dark);
+    color: var(--text-light);
+    padding: 0;
+  }
+  #s1 .accent-bar {
+    width: 6px;
+    background: linear-gradient(to bottom, var(--red), var(--yellow), var(--green));
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+  }
+  #s1 .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 48px 64px 48px 80px;
+    position: relative;
+  }
+  #s1 .top-bar {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: auto;
+  }
+  #s1 .main-title {
+    font-size: clamp(32px, 4.5vw, 52px);
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 14px;
+    letter-spacing: -0.5px;
+  }
+  #s1 .highlight {
+    color: var(--yellow);
+    display: block;
+  }
+  #s1 .subtitle {
+    font-size: 18px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 40px;
+  }
+  #s1 .tags {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.35);
+    margin-bottom: 48px;
+  }
+  #s1 .authors-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 40px;
+    margin-bottom: 48px;
+  }
+  #s1 .author {
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.5);
+    font-family: var(--mono);
+    line-height: 1.5;
+  }
+  #s1 .footer {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(255,255,255,0.25);
+  }
+  #s1 .tlight-wrap {
+    position: absolute;
+    right: 64px; top: 48px;
+  }
+
+  /* ════════════════════════════════
+     SLIDE 2 — INTRODUÇÃO (light)
+  ═══════════════════════════════════ */
+  #s2 {
+    background: var(--light);
+    color: var(--text-dark);
+  }
+  .slide-light { background: var(--light); color: var(--text-dark); }
+  .slide-dark { background: var(--dark); color: var(--text-light); }
+
+  .slide-header {
+    padding: 32px 60px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2.5px;
+    color: rgba(0,0,0,0.35);
+    text-transform: uppercase;
+  }
+  .slide-header.light-h { color: rgba(0,0,0,0.3); }
+  .slide-header.dark-h { color: rgba(255,255,255,0.3); }
+
+  .slide-title {
+    font-size: clamp(26px, 3vw, 38px);
+    font-weight: 700;
+    padding: 14px 60px 20px;
+    border-left: 5px solid var(--green);
+    margin: 14px 60px 18px;
+    line-height: 1.15;
+    letter-spacing: -0.3px;
+  }
+  .slide-title.yellow-border { border-left-color: var(--yellow); }
+  .slide-title.red-border { border-left-color: var(--red); }
+  .slide-title.blue-border { border-left-color: var(--blue); }
+  .slide-title.green-border { border-left-color: var(--green); }
+
+  /* 3-col cards */
+  .cards3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    padding: 0 60px;
+    flex: 1;
+  }
+  .card {
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .card.green-card::before { background: var(--green); }
+  .card.yellow-card::before { background: var(--yellow); }
+  .card.blue-card::before { background: var(--blue); }
+  .card.red-card::before { background: var(--red); }
+  .card.gray-card::before { background: #888; }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+  }
+  .card-label.green { color: var(--green); }
+  .card-label.yellow { color: #d97706; }
+  .card-label.blue { color: #2563eb; }
+  .card-label.red { color: #dc2626; }
+  .card-label.teal { color: #0891b2; }
+
+  .card p { font-size: 13.5px; line-height: 1.65; color: #444; }
+
+  .footnote {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(0,0,0,0.3);
+    padding: 16px 60px 20px;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    margin-top: auto;
+  }
+
+  /* ════════════ SLIDE 3 — dark with list cards ════════ */
+  #s3 { background: var(--dark); color: var(--text-light); }
+  .list-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 60px;
+    flex: 1;
+  }
+  .lcard {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 18px 22px;
+    border-left: 4px solid transparent;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-left: 4px solid transparent;
+  }
+  .lcard.green-l { border-left-color: var(--green); }
+  .lcard.yellow-l { border-left-color: var(--yellow); }
+  .lcard.blue-l { border-left-color: var(--blue); }
+  .lcard.red-l { border-left-color: var(--red); }
+  .lcard-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    min-width: 160px;
+  }
+  .lcard-label.green { color: var(--green); }
+  .lcard-label.yellow { color: var(--yellow); }
+  .lcard-label.blue { color: var(--blue); }
+  .lcard-label.red { color: var(--red); }
+  .lcard p { font-size: 13px; line-height: 1.6; color: rgba(255,255,255,0.65); }
+
+  /* ════════════ SLIDE 4 — DESCRIÇÃO (light) ════════════ */
+  #s4 { background: var(--light); color: var(--text-dark); }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 0 60px;
+    flex: 1;
+  }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+  .info-card {
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .info-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; bottom: 0;
+  }
+  .info-card.red-ic::before { background: var(--red); }
+  .info-card.yellow-ic::before { background: var(--yellow); }
+  .info-card.green-ic::before { background: var(--green); }
+  .info-card.blue-ic::before { background: var(--blue); }
+  .ic-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .ic-label.red { color: #dc2626; }
+  .ic-label.yellow { color: #d97706; }
+  .ic-label.green { color: #16a34a; }
+  .ic-label.blue { color: #2563eb; }
+  .info-card p { font-size: 13px; line-height: 1.65; color: #444; }
+
+  .rf-list { list-style: none; }
+  .rf-list li {
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #444;
+    padding-left: 16px;
+    position: relative;
+  }
+  .rf-list li::before {
+    content: '→';
+    position: absolute; left: 0;
+    color: var(--green); font-size: 11px;
+  }
+  .rnf-text { font-size: 11.5px; line-height: 1.7; color: #555; }
+
+  /* ════════════ SLIDE 5 — MODELAGEM (dark) ════════════ */
+  #s5 { background: var(--dark); color: var(--text-light); }
+  .block-diagram {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 60px;
+    margin-bottom: 20px;
+  }
+  .bd-box {
+    border: 1.5px solid;
+    border-radius: 4px;
+    padding: 14px 20px;
+    text-align: center;
+    min-width: 160px;
+  }
+  .bd-box.inp { border-color: var(--blue); }
+  .bd-box.clp { border-color: var(--yellow); }
+  .bd-box.out { border-color: var(--green); }
+  .bd-box-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+  .bd-box.inp .bd-box-title { color: var(--blue); }
+  .bd-box.clp .bd-box-title { color: var(--yellow); }
+  .bd-box.out .bd-box-title { color: var(--green); }
+  .bd-box p { font-size: 12px; line-height: 1.6; color: rgba(255,255,255,0.6); }
+  .bd-arrow {
+    flex: 1;
+    height: 2px;
+    background: rgba(255,255,255,0.15);
+    position: relative;
+    margin: 0 4px;
+  }
+  .bd-arrow::after {
+    content: '▶';
+    position: absolute;
+    right: -8px; top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255,255,255,0.25);
+    font-size: 10px;
+  }
+  .data-table {
+    margin: 0 60px;
+    border-collapse: collapse;
+    width: calc(100% - 120px);
+    font-size: 12px;
+  }
+  .data-table th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--yellow);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+  }
+  .data-table td {
+    padding: 7px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.7);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .tag-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 700;
+  }
+  .tag-i { background: rgba(96,165,250,0.2); color: var(--blue); }
+  .tag-q { background: rgba(74,222,128,0.2); color: var(--green); }
+  .tag-m { background: rgba(251,191,36,0.2); color: var(--yellow); }
+  .tag-t { background: rgba(248,113,113,0.2); color: var(--red); }
+
+  /* ════════════ SLIDE 6 — LÓGICA LADDER (light) ════════════ */
+  #s6 { background: var(--light); color: var(--text-dark); }
+  .ladder-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 0 60px;
+    flex: 1;
+  }
+  .timer-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    margin-top: 10px;
+  }
+  .timer-table th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: #888;
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+  }
+  .timer-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    color: #555;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .rung-list { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+  .rung-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    font-family: var(--mono);
+  }
+  .rung-badge {
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    min-width: 60px;
+    text-align: center;
+  }
+  .rb-green { background: rgba(74,222,128,0.15); color: #16a34a; }
+  .rb-yellow { background: rgba(251,191,36,0.15); color: #d97706; }
+  .rb-red { background: rgba(248,113,113,0.15); color: #dc2626; }
+  .rb-gray { background: rgba(0,0,0,0.06); color: #888; }
+  .rb-blue { background: rgba(96,165,250,0.15); color: #2563eb; }
+  .rung-desc { color: #555; font-size: 11.5px; }
+
+  /* ════════════ SLIDE 7 — SIMULAÇÃO (dark) ════════════ */
+  #s7 { background: var(--dark); color: var(--text-light); }
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 0 60px;
+    margin-bottom: 16px;
+    flex: 1;
+  }
+  .scenario-card {
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 22px 24px;
+    border: 1px solid rgba(255,255,255,0.07);
+  }
+  .sc-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .sc-title.green { color: var(--green); }
+  .sc-title.yellow { color: var(--yellow); }
+  .sc-list { list-style: none; }
+  .sc-list li {
+    font-size: 13px;
+    line-height: 1.7;
+    color: rgba(255,255,255,0.65);
+    padding-left: 18px;
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .sc-list li::before {
+    content: '✓';
+    position: absolute; left: 0;
+    color: var(--green); font-size: 11px;
+  }
+  .synth-bar {
+    margin: 0 60px;
+    background: rgba(74,222,128,0.06);
+    border: 1px solid rgba(74,222,128,0.25);
+    border-radius: 6px;
+    padding: 14px 22px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .synth-bar span { color: var(--green); font-weight: 700; }
+
+  /* ════════════ SLIDE 8 — DISCUSSÃO (light) ════════════ */
+  #s8 { background: var(--light); color: var(--text-dark); }
+  .future-list { display: flex; flex-direction: column; gap: 10px; }
+  .future-item { display: flex; gap: 14px; align-items: flex-start; }
+  .future-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+  .future-item h4 { font-size: 13.5px; font-weight: 600; color: #222; margin-bottom: 2px; }
+  .future-item p { font-size: 12px; color: #666; line-height: 1.5; }
+
+  /* ════════════ SLIDE 9 — CONCLUSÃO (dark) ════════════ */
+  #s9 { background: var(--dark); color: var(--text-light); }
+  .concl-list { display: flex; flex-direction: column; gap: 12px; padding: 0 60px; flex: 1; }
+  .concl-item {
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 18px 22px;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    border: 1px solid rgba(255,255,255,0.07);
+  }
+  .concl-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .ci-red { background: var(--red); }
+  .ci-yellow { background: var(--yellow); }
+  .ci-blue { background: var(--blue); }
+  .ci-green { background: var(--green); }
+  .concl-item h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .concl-item p { font-size: 13px; line-height: 1.6; color: rgba(255,255,255,0.6); }
+  .concl-footer {
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(255,255,255,0.2);
+    padding: 20px;
+    margin-top: auto;
+  }
+
+  /* ── keyboard hint ── */
+  .key-hint {
+    position: fixed;
+    bottom: 76px; right: 24px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: rgba(255,255,255,0.2);
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(8px);
+    padding: 5px 10px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+  <!-- ══════ SLIDE 1 — CAPA ══════ -->
+  <div class="slide" id="s1">
+    <div class="accent-bar"></div>
+    <div class="content">
+      <div class="top-bar anim fade-in d1">
+        UNIVERSIDADE SÃO JUDAS TADEU &nbsp;·&nbsp; ENGENHARIA DE SOFTWARE &nbsp;·&nbsp; SISTEMAS AUTOMATIZADOS
+      </div>
+
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+        <div class="main-title anim fade-up d2">
+          Sistema Automatizado de
+          <span class="highlight">Semáforo Inteligente</span>
+        </div>
+        <div class="subtitle anim fade-up d3">com Botoeira de Travessia de Pedestres</div>
+        <div class="tags anim fade-up d4">CLP &nbsp;·&nbsp; LINGUAGEM LADDER &nbsp;·&nbsp; MacroPLC</div>
+
+        <div class="authors-grid anim fade-up d5">
+          <div class="author">Cauã Aragão Campos Lemes</div>
+          <div class="author">Guilherme Henrique das Chagas</div>
+          <div class="author">Lucas Daniel da Silva Araujo</div>
+          <div class="author">Nathan Costa Ferreira</div>
+          <div class="author">Felipe Silva Oliveira</div>
+          <div class="author">Pedro Henrique Ramos Félix</div>
+          <div class="author">Fernanda do Vale Ribeiro</div>
+          <div class="author">Pedro Henrique de Souza Alves</div>
+        </div>
+      </div>
+
+      <div class="footer anim fade-in d6">Prof. Robson Calvetti &nbsp;·&nbsp; São Paulo, 2026</div>
+    </div>
+
+    <!-- traffic light -->
+    <div class="tlight-wrap anim scale-in d3">
+      <svg viewBox="0 0 52 120" width="52" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="44" height="112" rx="8" fill="#1a1a1a" stroke="#333" stroke-width="2"/>
+        <!-- red ON -->
+        <circle cx="26" cy="26" r="14" fill="#f87171" filter="url(#glow-r)"/>
+        <circle cx="26" cy="60" r="14" fill="#2a2a2a"/>
+        <circle cx="26" cy="94" r="14" fill="#2a2a2a"/>
+        <defs>
+          <filter id="glow-r"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ══════ SLIDE 2 — INTRODUÇÃO ══════ -->
+  <div class="slide" id="s2">
+    <div class="slide-header light-h anim fade-in d1">02 // INTRODUÇÃO</div>
+    <div class="slide-title yellow-border anim fade-left d2">Introdução & Contexto</div>
+
+    <div class="cards3">
+      <div class="card yellow-card anim fade-up d2">
+        <div class="card-label yellow">AUTOMAÇÃO URBANA</div>
+        <p>Sistemas de semáforos coordenam fluxo de veículos e pedestres em cruzamentos urbanos, exigindo precisão temporal e mecanismos de segurança.</p>
+      </div>
+      <div class="card blue-card anim fade-up d3">
+        <div class="card-label blue">CLP NO SEMÁFORO</div>
+        <p>O Controlador Lógico Programável garante resposta determinística, confiabilidade e facilidade de reprogramação em comparação a soluções por relés.</p>
+      </div>
+      <div class="card green-card anim fade-up d4">
+        <div class="card-label teal">ENG. DE SOFTWARE</div>
+        <p>Para o engenheiro de software, sistemas ciberfísicos e Indústria 4.0 exigem integração de lógicas de controle com software embarcado e supervisório.</p>
+      </div>
+    </div>
+
+    <div class="footnote anim fade-in d5">
+      Implementação em Ladder no simulador MacroPLC — ciclo verde–amarelo–vermelho com botoeira de pedestre
+    </div>
+  </div>
+
+  <!-- ══════ SLIDE 3 — FUNDAMENTAÇÃO ══════ -->
+  <div class="slide" id="s3">
+    <div class="slide-header dark-h anim fade-in d1">03 // FUNDAMENTAÇÃO TEÓRICA</div>
+    <div class="slide-title green-border anim fade-left d2" style="color:#fff;border-color:var(--green)">Fundamentação Teórica</div>
+
+    <div class="list-cards">
+      <div class="lcard yellow-l anim fade-up d2">
+        <div>
+          <div class="lcard-label yellow">AUTOMAÇÃO INDUSTRIAL</div>
+          <p>Substitui intervenção humana em processos produtivos, garantindo produtividade, repetibilidade e segurança. Evoluiu de relés eletromecânicos a CLPs digitais integrados à nuvem (Indústria 4.0).</p>
+        </div>
+      </div>
+      <div class="lcard blue-l anim fade-up d3">
+        <div>
+          <div class="lcard-label blue">CLP — IEC 61131</div>
+          <p>Dispositivo digital industrial com CPU, memórias, módulos de E/S e fonte de alimentação. Ciclo de varredura (scan): leitura de entradas → execução do programa → atualização de saídas.</p>
+        </div>
+      </div>
+      <div class="lcard green-l anim fade-up d4">
+        <div>
+          <div class="lcard-label green">LINGUAGEM LADDER</div>
+          <p>Diagrama de contatos derivado de esquemas elétricos. Organizado em rungs com contatos NA/NF, bobinas, temporizadores (TON/TOF/TP) e contadores (CTU/CTD).</p>
+        </div>
+      </div>
+      <div class="lcard red-l anim fade-up d5">
+        <div>
+          <div class="lcard-label red">SENSORES & ATUADORES</div>
+          <p>Entradas: botoeiras de partida (I01), parada (I02) e pedestre (I03). Saídas: módulos LED verde (Q01), amarelo (Q02) e vermelho (Q03) do semáforo.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- traffic light amber -->
+    <div style="position:absolute;right:60px;top:56px;" class="anim scale-in d3">
+      <svg viewBox="0 0 52 120" width="52" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="44" height="112" rx="8" fill="#1a1a1a" stroke="#333" stroke-width="2"/>
+        <circle cx="26" cy="26" r="14" fill="#2a2a2a"/>
+        <circle cx="26" cy="60" r="14" fill="#fbbf24" filter="url(#glow-y)"/>
+        <circle cx="26" cy="94" r="14" fill="#2a2a2a"/>
+        <defs>
+          <filter id="glow-y"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ══════ SLIDE 4 — DESCRIÇÃO ══════ -->
+  <div class="slide" id="s4">
+    <div class="slide-header light-h anim fade-in d1">04 // DESCRIÇÃO DO SISTEMA</div>
+    <div class="slide-title red-border anim fade-left d2">Descrição do Sistema</div>
+
+    <div class="grid2">
+      <div class="col">
+        <div class="info-card red-ic anim fade-up d2">
+          <div class="ic-label red">PROBLEMA</div>
+          <p>Ciclos fixos privilegiam veículos em detrimento do pedestre. A botoeira de solicitação garante travessia segura registrando a demanda até ser atendida.</p>
+        </div>
+        <div class="info-card yellow-ic anim fade-up d3">
+          <div class="ic-label yellow">OBJETIVO</div>
+          <p>Controlar automaticamente o ciclo verde–amarelo–vermelho e priorizar travessia por botoeira (I03).</p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="info-card green-ic anim fade-up d3">
+          <div class="ic-label green">REQUISITOS FUNCIONAIS</div>
+          <ul class="rf-list">
+            <li>RF01 — Partida via botoeira Start (I01)</li>
+            <li>RF02 — Verde (Q01) por tempo T01</li>
+            <li>RF03 — Amarelo (Q02) por tempo T02 após Q01</li>
+            <li>RF04 — Vermelho (Q03) por tempo T03 após Q02</li>
+            <li>RF05 — Retorno automático ao início do ciclo</li>
+            <li>RF06 — Memoriza solicitação de pedestre em M01</li>
+            <li>RF07 — Janela de travessia segura via T05</li>
+          </ul>
+        </div>
+        <div class="info-card blue-ic anim fade-up d4">
+          <div class="ic-label blue">REQUISITOS NÃO FUNCIONAIS</div>
+          <p class="rnf-text">RNF01 Segurança: Q01 e Q03 nunca simultâneos · RNF02 Determinismo: resposta &lt; 200ms · RNF03 Confiabilidade · RNF04 Manutenibilidade · RNF05 Portabilidade</p>
+        </div>
+      </div>
+    </div>
+    <div style="padding:8px 60px 0;"></div>
+  </div>
+
+  <!-- ══════ SLIDE 5 — MODELAGEM ══════ -->
+  <div class="slide" id="s5">
+    <div class="slide-header dark-h anim fade-in d1">05 // MODELAGEM DO SISTEMA</div>
+    <div class="slide-title anim fade-left d2" style="color:#fff;border-color:var(--blue)">Modelagem do Sistema</div>
+
+    <div style="padding:0 60px;margin-bottom:12px;" class="anim fade-in d2">
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--yellow);margin-bottom:10px;">DIAGRAMA DE BLOCOS</div>
+      <div class="block-diagram" style="padding:0;">
+        <div class="bd-box inp anim scale-in d3">
+          <div class="bd-box-title">ENTRADAS</div>
+          <p>I01 Start<br>I02 Stop<br>I03 Pedestre</p>
+        </div>
+        <div class="bd-arrow anim fade-in d3"></div>
+        <div class="bd-box clp anim scale-in d4">
+          <div class="bd-box-title">CLP</div>
+          <p>Programa<br>Ladder</p>
+        </div>
+        <div class="bd-arrow anim fade-in d4"></div>
+        <div class="bd-box out anim scale-in d5">
+          <div class="bd-box-title">SAÍDAS</div>
+          <p>Q01 Verde<br>Q02 Amarelo<br>Q03 Vermelho</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:0 60px;font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--blue);margin-bottom:8px;" class="anim fade-in d4">
+      MAPA DE ENTRADAS, SAÍDAS, MEMÓRIAS E TEMPORIZADORES
+    </div>
+    <table class="data-table anim fade-up d5">
+      <thead>
+        <tr><th>TAG</th><th>TIPO</th><th>ENDEREÇO</th><th>DESCRIÇÃO</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="tag-badge tag-i">I01</span></td><td>Entrada digital</td><td>I01</td><td>Botão de partida (Start)</td></tr>
+        <tr><td><span class="tag-badge tag-i">I02</span></td><td>Entrada digital</td><td>I02</td><td>Botão de parada de emergência (Stop)</td></tr>
+        <tr><td><span class="tag-badge tag-i">I03</span></td><td>Entrada digital</td><td>I03</td><td>Botoeira de travessia de pedestre</td></tr>
+        <tr><td><span class="tag-badge tag-q">Q01</span></td><td>Saída digital</td><td>Q01</td><td>Lâmpada verde — semáforo de veículos</td></tr>
+        <tr><td><span class="tag-badge tag-q">Q02</span></td><td>Saída digital</td><td>Q02</td><td>Lâmpada amarela — semáforo de veículos</td></tr>
+        <tr><td><span class="tag-badge tag-q">Q03</span></td><td>Saída digital</td><td>Q03</td><td>Lâmpada vermelha — semáforo de veículos</td></tr>
+        <tr><td><span class="tag-badge tag-m">M01</span></td><td>Memória interna</td><td>M01</td><td>Flag de solicitação de pedestre</td></tr>
+        <tr><td><span class="tag-badge tag-t">T01–T05</span></td><td>Temporizador</td><td>t01–t05</td><td>Verde / Amarelo / Vermelho / Reset / Travessia</td></tr>
+      </tbody>
+    </table>
+
+    <!-- traffic light green -->
+    <div style="position:absolute;right:60px;top:56px;" class="anim scale-in d2">
+      <svg viewBox="0 0 52 120" width="52" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="44" height="112" rx="8" fill="#1a1a1a" stroke="#333" stroke-width="2"/>
+        <circle cx="26" cy="26" r="14" fill="#2a2a2a"/>
+        <circle cx="26" cy="60" r="14" fill="#2a2a2a"/>
+        <circle cx="26" cy="94" r="14" fill="#4ade80" filter="url(#glow-g)"/>
+        <defs>
+          <filter id="glow-g"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ══════ SLIDE 6 — LÓGICA LADDER ══════ -->
+  <div class="slide" id="s6">
+    <div class="slide-header light-h anim fade-in d1">06 // DESENVOLVIMENTO DA LÓGICA DE CONTROLE</div>
+    <div class="slide-title green-border anim fade-left d2">Lógica em Ladder</div>
+
+    <div class="ladder-grid">
+      <div class="col">
+        <div class="info-card green-ic anim fade-up d2">
+          <div class="ic-label green">ESTRATÉGIA DE CONTROLE</div>
+          <p>Temporizadores em cascata: conclusão de um habilita o próximo. Memória M01 selada armazena solicitação do pedestre até atendimento seguro na fase vermelha.</p>
+        </div>
+        <div class="info-card blue-ic anim fade-up d3">
+          <div class="ic-label blue">TEMPORIZADORES (PRESET SUGERIDO)</div>
+          <table class="timer-table">
+            <thead><tr><th>TIMER</th><th>PRESET</th><th>FUNÇÃO</th></tr></thead>
+            <tbody>
+              <tr><td>T01</td><td>15 s</td><td>Fase VERDE (veículos)</td></tr>
+              <tr><td>T02</td><td>3 s</td><td>Fase AMARELA</td></tr>
+              <tr><td>T03</td><td>12 s</td><td>Fase VERMELHA / verde pedestre</td></tr>
+              <tr><td>T04</td><td>30 s</td><td>Reset de ciclo</td></tr>
+              <tr><td>T05</td><td>8 s</td><td>Janela de travessia do pedestre</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="col">
+        <div class="info-card yellow-ic anim fade-up d3">
+          <div class="ic-label yellow">RUNGS PRINCIPAIS — EQUAÇÕES LÓGICAS</div>
+          <div class="rung-list">
+            <div class="rung-item">
+              <span class="rung-badge rb-gray">Rungs 1–3</span>
+              <span class="rung-desc">Cadeia T01 → T02 → T03 (cascata de temporizadores)</span>
+            </div>
+            <div class="rung-item">
+              <span class="rung-badge rb-green">Rung 4</span>
+              <span class="rung-desc">Q01 (verde) = t01 · NOT t04</span>
+            </div>
+            <div class="rung-item">
+              <span class="rung-badge rb-yellow">Rung 5</span>
+              <span class="rung-desc">Q02 (amarelo) = T01 · NOT t02</span>
+            </div>
+            <div class="rung-item">
+              <span class="rung-badge rb-red">Rung 6</span>
+              <span class="rung-desc">Q03 (vermelho) = T02 · NOT t04</span>
+            </div>
+            <div class="rung-item">
+              <span class="rung-badge rb-gray">Rung 7</span>
+              <span class="rung-desc">Reset: T04 expira → reinicia todos os timers</span>
+            </div>
+            <div class="rung-item">
+              <span class="rung-badge rb-blue">Rung 8</span>
+              <span class="rung-desc">M01 (pedestre) = I03 + (M01 · NOT t05)</span>
+            </div>
+            <div class="rung-item">
+              <span class="rung-badge rb-green">Rung 9</span>
+              <span class="rung-desc">T05 habilitado por M01 durante fase vermelha</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ SLIDE 7 — SIMULAÇÃO ══════ -->
+  <div class="slide" id="s7">
+    <div class="slide-header dark-h anim fade-in d1">07 // RESULTADOS DA SIMULAÇÃO</div>
+    <div class="slide-title anim fade-left d2" style="color:#fff;border-color:var(--red)">Simulação & Resultados</div>
+
+    <div class="scenario-grid">
+      <div class="scenario-card anim fade-up d2">
+        <div class="sc-title green">CENÁRIO 1 — OPERAÇÃO NORMAL</div>
+        <ul class="sc-list">
+          <li>Partida via I01 → ciclo verde–amarelo–vermelho sequencial</li>
+          <li>Intertravamento Q01 / Q03 confirmado em todos os ciclos (RNF01)</li>
+          <li>Retorno automático à fase verde ao término de T04 (RF05)</li>
+          <li>10 ciclos realizados sem reinicialização manual (RNF03)</li>
+        </ul>
+      </div>
+      <div class="scenario-card anim fade-up d3">
+        <div class="sc-title yellow">CENÁRIO 2 — SOLICITAÇÃO DE PEDESTRE</div>
+        <ul class="sc-list">
+          <li>I03 acionado durante fase verde → M01 energizada imediatamente</li>
+          <li>Memória M01 selada até atingir fase vermelha</li>
+          <li>T05 garante janela de travessia segura (RF07)</li>
+          <li>M01 resetada após T05 expirar (RF06) — 10 ciclos validados</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="synth-bar anim fade-up d4">
+      <span>SÍNTESE DOS TESTES</span>
+      &nbsp;·&nbsp; 20 ciclos completos
+      &nbsp;·&nbsp; Comportamento determinístico em <span>100%</span> das repetições
+      &nbsp;·&nbsp; Todos os requisitos RF e RNF atendidos
+    </div>
+
+    <div style="position:absolute;right:60px;top:56px;" class="anim scale-in d2">
+      <svg viewBox="0 0 52 120" width="52" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="44" height="112" rx="8" fill="#1a1a1a" stroke="#333" stroke-width="2"/>
+        <circle cx="26" cy="26" r="14" fill="#f87171" filter="url(#glow-r2)"/>
+        <circle cx="26" cy="60" r="14" fill="#2a2a2a"/>
+        <circle cx="26" cy="94" r="14" fill="#2a2a2a"/>
+        <defs>
+          <filter id="glow-r2"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ══════ SLIDE 8 — DISCUSSÃO ══════ -->
+  <div class="slide" id="s8">
+    <div class="slide-header light-h anim fade-in d1">08 // DISCUSSÃO DOS RESULTADOS</div>
+    <div class="slide-title blue-border anim fade-left d2">Discussão & Limitações</div>
+
+    <div class="grid2">
+      <div class="col">
+        <div class="info-card green-ic anim fade-up d2">
+          <div class="ic-label green">PONTOS POSITIVOS</div>
+          <ul class="rf-list">
+            <li>Todos os requisitos funcionais (RF01–RF07) e não funcionais (RNF01–RNF05) foram plenamente atendidos</li>
+            <li>Cadeia de temporizadores em cascata — lógica de fácil leitura e manutenção</li>
+            <li>Memória M01 desacopla instante da solicitação do atendimento (comportamento reativo adequado)</li>
+          </ul>
+        </div>
+        <div class="info-card red-ic anim fade-up d3">
+          <div class="ic-label red">LIMITAÇÕES</div>
+          <ul class="rf-list">
+            <li>Modela apenas um sentido do cruzamento</li>
+            <li>Temporização fixa — sem adaptação ao volume de tráfego</li>
+            <li>Sem tratamento de falhas físicas (modo degradado)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col">
+        <div class="info-card blue-ic anim fade-up d3">
+          <div class="ic-label blue">TRABALHOS FUTUROS</div>
+          <div class="future-list">
+            <div class="future-item">
+              <div class="future-dot"></div>
+              <div><h4>2º Semáforo Veicular</h4><p>Intertravamento completo do cruzamento entre dois semáforos</p></div>
+            </div>
+            <div class="future-item">
+              <div class="future-dot" style="background:var(--yellow)"></div>
+              <div><h4>Contadores CTU/CTD</h4><p>Registro estatístico do número de travessias atendidas</p></div>
+            </div>
+            <div class="future-item">
+              <div class="future-dot" style="background:var(--red)"></div>
+              <div><h4>Modo Noturno</h4><p>Entrada digital adicional para ativar piscante amarelo</p></div>
+            </div>
+            <div class="future-item">
+              <div class="future-dot" style="background:var(--green)"></div>
+              <div><h4>Supervisório SCADA</h4><p>Monitoramento remoto via Modbus TCP — integração com Indústria 4.0</p></div>
+            </div>
+            <div class="future-item">
+              <div class="future-dot" style="background:#a855f7"></div>
+              <div><h4>Sensores de Presença</h4><p>Laços indutivos ou câmeras para temporização dinâmica</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ SLIDE 9 — CONCLUSÃO ══════ -->
+  <div class="slide" id="s9">
+    <div class="slide-header dark-h anim fade-in d1">09 // CONCLUSÃO</div>
+    <div class="slide-title anim fade-left d2" style="color:#fff;border-color:var(--green)">Conclusão</div>
+
+    <div class="concl-list">
+      <div class="concl-item anim fade-up d2">
+        <div class="concl-icon ci-red"></div>
+        <div>
+          <h3>Objetivos atingidos</h3>
+          <p>Lógica Ladder desenvolvida e validada em dois cenários com 20 ciclos determinísticos.</p>
+        </div>
+      </div>
+      <div class="concl-item anim fade-up d3">
+        <div class="concl-icon ci-yellow"></div>
+        <div>
+          <h3>Aprendizado prático</h3>
+          <p>Ciclo de varredura, temporizadores, intertravamento e sistemas ciberfísicos na prática.</p>
+        </div>
+      </div>
+      <div class="concl-item anim fade-up d4">
+        <div class="concl-icon ci-blue"></div>
+        <div>
+          <h3>Portabilidade</h3>
+          <p>Lógica portável para qualquer simulador Ladder; adaptável a hardware didático físico.</p>
+        </div>
+      </div>
+      <div class="concl-item anim fade-up d5">
+        <div class="concl-icon ci-green"></div>
+        <div>
+          <h3>Perspectivas</h3>
+          <p>Evolução natural para Indústria 4.0 e cidades inteligentes com SCADA e IoT.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="concl-footer anim fade-in d6">
+      Universidade São Judas Tadeu &nbsp;·&nbsp; Prof. Robson Calvetti &nbsp;·&nbsp; São Paulo, 2026
+    </div>
+
+    <div style="position:absolute;right:60px;top:56px;" class="anim scale-in d2">
+      <svg viewBox="0 0 52 120" width="52" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="44" height="112" rx="8" fill="#1a1a1a" stroke="#333" stroke-width="2"/>
+        <circle cx="26" cy="26" r="14" fill="#2a2a2a"/>
+        <circle cx="26" cy="60" r="14" fill="#2a2a2a"/>
+        <circle cx="26" cy="94" r="14" fill="#4ade80" filter="url(#glow-g2)"/>
+        <defs>
+          <filter id="glow-g2"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- NAV -->
+<nav class="nav">
+  <button id="prevBtn" onclick="go(-1)">&#8592;</button>
+  <div class="dots" id="dots"></div>
+  <span class="counter" id="counter">1 / 9</span>
+  <button id="nextBtn" onclick="go(1)">&#8594;</button>
+</nav>
+
+<div class="key-hint">← → ou clique</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const dotsContainer = document.getElementById('dots');
+const counter = document.getElementById('counter');
+const TOTAL = slides.length;
+let current = 0;
+
+// Build dots
+slides.forEach((_, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot' + (i === 0 ? ' active' : '');
+  d.onclick = () => goTo(i);
+  dotsContainer.appendChild(d);
+});
+
+function goTo(n) {
+  slides[current].classList.remove('active');
+  // reset animations
+  slides[current].querySelectorAll('.anim').forEach(el => {
+    el.style.animationName = 'none';
+    void el.offsetWidth;
+    el.style.animationName = '';
+  });
+  current = (n + TOTAL) % TOTAL;
+  slides[current].classList.add('active');
+  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === current));
+  counter.textContent = `${current + 1} / ${TOTAL}`;
+}
+
+function go(dir) { goTo(current + dir); }
+
+// Init
+slides[0].classList.add('active');
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') go(1);
+  if (e.key === 'ArrowLeft') go(-1);
+});
+
+// Click anywhere on slide to advance
+document.querySelector('.deck').addEventListener('click', e => {
+  if (!e.target.closest('.nav')) go(1);
+});
+</script>
+</body>
+</html>
